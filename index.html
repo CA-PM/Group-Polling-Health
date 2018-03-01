@@ -1,0 +1,312 @@
+
+    <html>
+    <head lang="en">
+        <meta charset="UTF-8">
+    	<title>Group Polling Health</title>
+        <link   href="./css/nv.d3.css" rel="stylesheet" ></link>
+        <link   href="./css/CA_dashboard.css" rel="stylesheet"/>
+        <script src="./lib/caHelperFunctions.js" type="text/javascript"></script>
+        <script src="./lib/jquery/jquery-1.11.1.min.js" type="text/javascript"></script>
+        <script src="./lib/d3/d3.min.js" type="text/javascript"></script>
+        <script src="./lib/d3/d3-queue.v3.min.js" type="text/javascript"></script>
+        <script src="./lib/nvd3/nv.d3.js" type="text/javascript"></script>
+        <script src="./lib/spin.js" type="text/javascript"></script>
+        <script src="./lib/nvd3/src/models/pie.js" type="text/javascript"></script>
+
+    </head>
+
+<body>
+<div id="main">
+    <div class="row">
+        <div class="title">Group Poll Health Summary</div>
+        <div class="view view_3">
+            <div class="content" style="height: 300px;" id="chart1">
+                <svg id="donut1"></svg>
+            </div>
+        </div>
+        <div class="view view_3">
+            <div class="content" style="height: 300px;" id="chart2">
+                <svg id="donut2"></svg>
+            </div>
+        </div>
+        <div class="view view_3">
+            <div class="content" style="height: 300px;" id="chart3">
+                <svg id="donut3"></svg>
+            </div>
+        </div>
+    </div>
+    <div class="row">
+        <div class="title">Last 24 Hours Group Poll Details</div>
+        <div class="view view_1">
+            <div class="content" style="height: 200px;" id="chart4">
+                <svg id="stackedTrend"></svg>
+            </div>
+        </div>
+    </div>
+</div>
+    <script>
+
+        // Define variables to store parameters passed to App from CAPC App view
+	    var groupID=getQueryVariable("id"),
+            userRole=getQueryVariable("role"),
+            deviceIP;
+
+        var // Define OpenAPI queries to fetch each timeframe
+	    	url1="/pc/odata/api/devicepollingstatisticsmfs?$apply=groupby(groups/ID, aggregate((im_NumPollsSent sub im_NumSuccessfulPolls) with sum as Value, im_NumSuccessfulPolls with sum as Value1))&resolution=RATE&period=1h&$format=text/csv&$filter=((groups/ID eq " + groupID +"))",
+
+	    	url2="/pc/odata/api/devicepollingstatisticsmfs?$apply=groupby(groups/ID, aggregate((im_NumPollsSent sub im_NumSuccessfulPolls) with sum as Value, im_NumSuccessfulPolls with sum as Value1))&resolution=RATE&period=1d&$format=text/csv&$filter=((groups/ID eq " + groupID +"))",
+
+	    	url3="/pc/odata/api/devicepollingstatisticsmfs?$apply=groupby(groups/ID, aggregate((im_NumPollsSent sub im_NumSuccessfulPolls) with sum as Value, im_NumSuccessfulPolls with sum as Value1))&&resolution=RATE&period=1w&$format=text/csv&$filter=((groups/ID eq " + groupID +"))";
+
+            url4="/pc/odata/api/devicepollingstatisticsmfs?$apply=groupby(Timestamp, aggregate((im_NumPollsSent sub im_NumSuccessfulPolls) with sum as Value, im_NumSuccessfulPolls with sum as Value1))&&resolution=HOUR&period=1w&$format=text/csv&$filter=((groups/ID eq " + groupID +"))&$top=1000";
+
+
+	  	// When running in demo mode, change the urls to call local data files containing CSV payload  
+        if (getQueryVariable('demo')) {
+           url1="./lastHour.csv";
+           url2="./last24Hours.csv"
+           url3="./lastWeek.csv"
+           url4="./group_Poll_Details.csv"
+           userRole="Administrator"
+           deviceIP="10.253.223.23"
+        }
+
+        var spinTarget = document.getElementById('main');
+        var spinner = new Spinner({color:'#000000', lines: 12}).spin(spinTarget);
+
+        d3.queue()
+            .defer(d3.csv, url1)
+            .defer(d3.csv, url2)
+            .defer(d3.csv, url3)
+            .defer(d3.csv, url4)
+            .awaitAll(function(error, results) {
+                if (error) throw error
+                    spinner.stop();
+                    processData(results);
+            });
+
+        function processData(theData) {
+
+            var lastHourCSV=theData[0],
+                last24HoursCSV=theData[1],
+                last7DaysCSV=theData[2],
+                last24HoursDetailsCSV=theData[3],
+                pollMessages=theData[4],
+                lastHourParsed=[],
+                last24HoursParsed=[],
+                last7DaysParsed=[],
+                last30DaysParsed=[],
+                last24HoursDetailsParsed=[];
+
+             lastHourCSV.forEach(function(d) {
+                deviceIP=d["device/PrimaryIPAddress"];
+                lastHourParsed.push({
+                    "label": "Good Polls",
+                    "value": Number(d["Value1"])
+                    },
+                   { 
+                    "label": "Bad Polls",
+                    "value": Number(d["Value"])
+                    }
+                );
+             });
+
+
+             last24HoursCSV.forEach(function(d) {
+                last24HoursParsed.push({
+                    "label": "Good Polls",
+                    "value": Number(d["Value1"])
+                    },
+                   { 
+                    "label": "Bad Polls",
+                    "value": Number(d["Value"])
+                    }
+                );
+             });
+
+            last7DaysCSV.forEach(function(d) {
+                last7DaysParsed.push({
+                    "label": "Good Polls",
+                    "value": Number(d["Value1"])
+                    },
+                   { 
+                    "label": "Bad Polls",
+                    "value": Number(d["Value"])
+                    }
+                );
+             });
+
+
+             last24HoursDetailsParsed.push(
+                {   key: "Good Polls",
+                     values:last24HoursDetailsCSV.map(function (dataPoint) {
+                        return ({"x": new Date(Number(dataPoint["Timestamp"])*1000), 
+                                 "y": Number(dataPoint["Value1"])
+                                });
+                })
+                        
+                },
+                {   key: "Bad Polls",
+                     values:last24HoursDetailsCSV.map(function (dataPoint) {
+                        return ({"x": new Date(Number(dataPoint["Timestamp"])*1000), 
+                                 "y": Number(dataPoint["Value"])
+                                });
+                })
+                        
+                }
+            );
+
+            console.log("Last Hour: " + JSON.stringify(lastHourParsed));
+            console.log("Last Day: " + JSON.stringify(last24HoursParsed));
+            console.log("Last Week: " + JSON.stringify(last7DaysParsed));
+            console.log("24 Hours Details: " + JSON.stringify(last24HoursDetailsParsed));
+
+
+           // Define the Pie chart model for the 3 polling summary indicators
+           nv.addGraph(function() {
+                var width="300";
+                var height="300";
+                var chart = nv.models.pieChart()
+                  .x(function(d) { return d.label })
+                  .y(function(d) { return d.value })
+                  .showLabels(true)     //Display pie labels
+                  .showLegend(false)
+                  .width(width)
+                  .height(height)
+                  .labelThreshold(.01)  //Configure the minimum slice size for labels to show up
+                  .labelType("percent") //Configure what type of data to show in the label. Can be "key", "value" or "percent"
+                  .donut(true)          //Turn on Donut mode. Makes pie chart look tasty!
+                  .donutRatio(0.55)     //Configure how big you want the donut hole size to be.
+                  .color(["#62bc51","#d62626"])
+                  .donutLabelsOutside(true)
+              
+                // Bind the data set to each of teh charts and
+                // define the target div + SVG location
+                d3.select("#chart1 svg")
+                    .datum(lastHourParsed)
+                    .transition().duration(350)
+                    .call(chart);
+
+                d3.select("#chart2 svg")
+                    .datum(last24HoursParsed)
+                    .transition().duration(350)
+                    .call(chart);
+
+                d3.select("#chart3 svg")
+                    .datum(last7DaysParsed)
+                    .transition().duration(350)
+                    .call(chart);
+
+                // Add the centered text label to each donut chart
+                d3.select('#donut1')
+                    .append("text")
+                    .attr("x", width/2)             
+                    .attr("y", (height/2)+9)
+                    .style("font-size", "22px") 
+                    .style("font-family","sans-serif") 
+                    .style("fill","black")
+                    .attr("text-anchor", "middle")  
+                    .text("Last Hour");
+              
+                d3.select('#donut2')
+                    .append("text")
+                    .attr("x", width/2)             
+                    .attr("y", (height/2)+9)
+                    .style("font-size", "22px") 
+                    .style("font-family","sans-serif") 
+                    .style("fill","black")
+                    .attr("text-anchor", "middle")  
+                    .text("Last Day");
+
+                d3.select('#donut3')
+                    .append("text")
+                    .attr("x", width/2)             
+                    .attr("y", (height/2)+9)
+                    .style("font-size", "22px") 
+                    .style("font-family","sans-serif") 
+                    .style("fill","black")
+                    .attr("text-anchor", "middle")  
+                    .text("Last Week");
+
+                // Call the function to resize the charts when/if the window size changes
+                nv.utils.windowResize(chart.update);
+
+                // Return the chart to the callback function
+                return chart;
+
+            });  // End nv.addGraph 
+
+           // Define the model for the stacked bar charts showing per hour details for last 24 hours
+            nv.addGraph(function() {
+                var chart = nv.models.multiBarChart()
+                    .transitionDuration(5)
+                    .reduceXTicks(true)   //If 'false', every single x-axis tick label will be rendered.
+                    .rotateLabels(0)      //Angle to rotate x-axis labels.
+                    .margin({top: 50, right: 90, bottom: 50, left: 75})
+                    .stacked(true)
+                    .showControls(false)
+                    .showLegend(true);  //Allow user to switch between 'Grouped' and 'Stacked' mode.
+                chart.color(["#62bc51","#d62626","#F38C31","#FDF46D"])
+                chart.height(200)
+                chart.xAxis.tickFormat(function(d) {return d3.time.format('%-I:%M %p')(new Date(d))});
+                chart.yAxis.tickFormat(d3.format(',.0f'));
+                chart.yAxis.axisLabel('Number of Polls')
+                         .axisLabelDistance(20);
+                chart.tooltips(true)
+                chart.tooltipContent(function(key, y, e, graph) {
+                    var data =graph.series.values[y-1];
+                    return  'At ' + y + ', ' + e + ' of the polls were ' + key + '.'
+                });
+
+                d3.select('#chart4 svg')
+                    .datum(last24HoursDetailsParsed)
+                    .call(chart);
+
+                nv.utils.windowResize(chart.update);
+
+                return chart;
+            }); 
+
+
+          /*  if (userRole == "Administrator" || getQueryVariable('demo')) {
+                var spinTarget = document.getElementById('details');
+                var spinner = new Spinner({color:'#000000', lines: 12}).spin(spinTarget);
+                var url5;
+                if (getQueryVariable('demo')) {
+                    url5="pollingLog.txt"
+                }
+                else
+                {
+                    url5="/pc/da/dcdebug/doSearch?ipDomainText=Default%20Domain&searchRadios=pollErrorRadio&searchText=" + deviceIP;
+                }
+
+                console.log("Getting polling errors for IP: " + deviceIP);
+                d3.text(url5, function (errors){
+                    spinner.stop();
+                    var lines = errors.split('\n');
+                    lines.reverse().forEach(function (line){
+                         $('#details').append("<br>" + line)
+                    })
+                })
+            } 
+            else {
+                 $('#details').append("You must be a user with role 'Administrator' to view poll messages.")
+            } */
+
+        } // End processData
+        // function to toggle display of poll info
+        function showHide() {
+            var x = document.getElementById("details");
+            if (x.style.display === "none") {
+                x.style.display = "block";
+            } 
+            else {
+                x.style.display = "none";
+            }
+        }
+
+    </script>
+    </body>
+    </html>
+
+
