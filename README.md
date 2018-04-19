@@ -14,7 +14,7 @@ Based on the NVD3 library.
 3. Select the file downloaded in step 1
    3a. If updating from a previous version of the App, please select the option to update existing apps
 4. Add an App View to the CAPC Dashboard or context page
-5. Select the Link Peak Analysis app from the drop-down menu and save the view & dashboard
+5. Select the Group Polling Health app from the drop-down menu and save the view & dashboard
 6. Select the target group and time-frame with the CAPC Dashboard controls
 
 ## Key URL parameters:
